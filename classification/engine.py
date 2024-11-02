@@ -42,15 +42,20 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             samples, targets = mixup_fn(samples, targets)
 
         if use_amp:
-            with torch.cuda.amp.autocast():
-                output = model(samples)
-                loss = criterion(output, targets)
+            if device == 'mps':
+                with torch.autocast(device_type = device, dtype = torch.bfloat16):
+                    output = model(samples)
+                    loss = criterion(output, targets)
+            else:
+                with torch.cuda.amp.autocast():
+                    output = model(samples)
+                    loss = criterion(output, targets)
         else:  # Full precision
             output = model(samples)
             loss = criterion(output, targets)
 
         loss_value = loss.item()
-
+        
         if not math.isfinite(loss_value):  # This could trigger if using AMP
             print("Loss is {}, stopping training".format(loss_value))
             assert math.isfinite(loss_value)
@@ -74,8 +79,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                 optimizer.zero_grad()
                 if model_ema is not None:
                     model_ema.update(model)
+        if torch.backends.mps.is_available():
+            torch.mps.synchronize()
+        else:
+            torch.cuda.synchronize()
 
-        torch.cuda.synchronize()
 
         if mixup_fn is None:
             class_acc = (output.max(-1)[-1] == targets).float().mean()
@@ -145,9 +153,14 @@ def evaluate(data_loader, model, device, use_amp=False):
 
         # Compute output
         if use_amp:
-            with torch.cuda.amp.autocast():
-                output = model(images)
-                loss = criterion(output, target)
+            if device == 'mps':
+                with torch.autocast(device_type = device, dtype = torch.bfloat16):
+                    output = model(images)
+                    loss = criterion(output, target)
+            else:
+                with torch.cuda.amp.autocast():
+                    output = model(images)
+                    loss = criterion(output, target)
         else:
             output = model(images)
             loss = criterion(output, target)

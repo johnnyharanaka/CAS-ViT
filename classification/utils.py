@@ -10,7 +10,8 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-from torch._six import inf
+#from torch._six import inf
+from torch import inf
 
 from tensorboardX import SummaryWriter
 
@@ -385,8 +386,11 @@ def load_state_dict(model, state_dict, prefix='', ignore_missing="relative_posit
 class NativeScalerWithGradNormCount:
     state_dict_key = "amp_scaler"
 
-    def __init__(self):
-        self._scaler = torch.cuda.amp.GradScaler()
+    def __init__(self,device):
+        if device == 'mps':
+            self._scaler = torch.GradScaler(device)
+        else:
+            self._scaler = torch.cuda.amp.GradScaler()
 
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
         self._scaler.scale(loss).backward(create_graph=create_graph)
@@ -441,6 +445,7 @@ def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epoch
         [final_value + 0.5 * (base_value - final_value) * (1 + math.cos(math.pi * i / (len(iters)))) for i in iters])
 
     schedule = np.concatenate((warmup_schedule, schedule))
+    print(f"epochs: {epochs}, niter_per_ep: {niter_per_ep},  len(schedule): {len(schedule)}")
 
     assert len(schedule) == epochs * niter_per_ep
     return schedule
