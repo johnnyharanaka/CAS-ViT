@@ -350,7 +350,7 @@ class RCViT_adapter(RCViT):
                 idx+= 1
             adapter = Adapter(dropout=0.1, d_model = self.dims[idx], bottleneck=self.dims[idx]//2,
                                     init_option="lora",
-                                    adapter_scalar="learnable_scalar",
+                                    adapter_scalar="1.0",
                                     adapter_layernorm_option="out",
                                     )#.to(self._device)
             
@@ -410,19 +410,21 @@ class Adapter(nn.Module):
         self.adapter_layer_norm_before = None
         if adapter_layernorm_option == "in" or adapter_layernorm_option == "out":
             #self.adapter_layer_norm_before = nn.InstanceNorm2d(self.n_embd,affine=True)
-            self.adapter_layer_norm_before = nn.BatchNorm2d(self.n_embd,affine=True)
+            self.adapter_layer_norm_before = nn.BatchNorm2d(self.n_embd)
 
         if adapter_scalar == "learnable_scalar":
             self.scale = nn.Parameter(torch.ones(1))
         else:
             self.scale = float(adapter_scalar)
 
-        self.down_proj = nn.Conv2d(self.n_embd, self.down_size, kernel_size=3, stride=1, padding=1, groups=2)
-        #self.down_proj = nn.Conv2d(self.n_embd, self.down_size, kernel_size=1, stride=1, padding=0)
+        #esse
+        #self.down_proj = nn.Conv2d(self.n_embd, self.down_size, kernel_size=3, stride=1, padding=1)
+        self.down_proj = nn.Conv2d(self.n_embd, self.down_size, kernel_size=1, stride=1, padding=0)
         self.non_linear_func = nn.ReLU()
 
-        self.up_proj = nn.ConvTranspose2d(self.down_size, self.n_embd, kernel_size=3, stride=1, padding=1, groups=2)
-        #self.up_proj = nn.ConvTranspose2d(self.down_size, self.n_embd, kernel_size=1, stride=1, padding=0)
+        #self.up_proj = nn.ConvTranspose2d(self.down_size, self.n_embd, kernel_size=3, stride=1, padding=1)
+        self.up_proj = nn.Conv2d(self.down_size, self.n_embd, kernel_size=1, stride=1, padding=0)
+        #self.up_proj = nn.Conv2d(self.down_size, self.n_embd, kernel_size=3, stride=1, padding=1)
 
         self.dropout = dropout
         if init_option == "bert":
@@ -446,7 +448,7 @@ class Adapter(nn.Module):
         up = self.up_proj(down)
 
         up = up * self.scale
-        #Upscale
+        
         if self.adapter_layernorm_option == 'out':
             up = self.adapter_layer_norm_before(up)
 
